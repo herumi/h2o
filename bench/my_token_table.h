@@ -152,6 +152,7 @@ inline int is_same_long_str(const char *text, const char *key, size_t keyLen)
 #ifdef __AVX2__
 	__m256i t = toLowerAVX(text);
 	__m256i k = _mm256_loadu_si256((const __m256i*)key);
+	return !_mm256_testc_si256(t, k);
 //    return t == k;
 	t = _mm256_cmpeq_epi8(t, k);
 	uint64_t m = _mm256_movemask_epi8(t);
