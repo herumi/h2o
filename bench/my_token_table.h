@@ -84,7 +84,8 @@ size_t h2o__num_tokens = 56;
 
 #include <memory.h>
 
-inline __m128i toLowerSSE(const char *p, size_t len)
+template<size_t len>
+inline __m128i toLowerSSE_T(const char *p)
 {
 	enum {
 		factor = 0x0101010101010101ull,
@@ -105,6 +106,9 @@ inline __m128i toLowerSSE(const char *p, size_t len)
 	x = _mm_add_epi8(x, t0);
 	return x;
 }
+
+#define toLowerSSE(p, len) toLowerSSE_T<len>(p)
+
 #ifdef __AVX2__
 inline __m256i toLowerAVX(const char *p)
 {
@@ -148,7 +152,7 @@ inline int is_same_long_str(const char *text, const char *key, size_t keyLen)
 #ifdef __AVX2__
 	__m256i t = toLowerAVX(text);
 	__m256i k = _mm256_loadu_si256((const __m256i*)key);
-    return t == k;
+//    return t == k;
 	t = _mm256_cmpeq_epi8(t, k);
 	uint64_t m = _mm256_movemask_epi8(t);
 	uint64_t mask = ((uint64_t)1 << keyLen) - 1;
