@@ -175,6 +175,32 @@ inline int is_same_long_str(const char *text, const char *key, size_t keyLen)
 #endif
 }
 
+inline void put(__m128i x)
+{
+	uint8_t buf[16];
+	_mm_storeu_si128((__m128i*)buf, x);
+	puts("---");
+	for (int i = 0; i < 16; i++) {
+		printf("%2d %02x\n", i, buf[i]);
+	}
+}
+inline uint32_t match_ptn(__m128i v, const void *ptn, const char *key)
+{
+	v = _mm_shuffle_epi8(v, *(const __m128i*)ptn);
+	v = _mm_cmpeq_epi8(v, *(const __m128i*)key);
+	return _mm_movemask_epi8(v);
+}
+
+inline uint32_t match_ptn2(__m128i v, const void *ptn, const char *key)
+{
+	__m256i v2 = _mm256_inserti128_si256(_mm256_castsi128_si256(v), v, 1);
+	v2 = _mm256_shuffle_epi8(v2, *(const __m256i*)ptn);
+	v2 = _mm256_cmpeq_epi8(v2, *(const __m256i*)key);
+	return _mm256_movemask_epi8(v2);
+}
+
+//#define REDUCE_COMPARE
+
 #ifdef BENCHMARK_MODE
 const h2o_token_t *my_h2o_lookup_token(const char *name, size_t len)
 #else
@@ -186,6 +212,17 @@ const h2o_token_t *h2o_lookup_token(const char *name, size_t len)
         __m128i v = toLowerSSE(name);
         switch (len) {
         case 3:
+#ifdef REDUCE_COMPARE
+			{
+				// 'X' in key never match.
+				static const MIE_ALIGN(16) char key[16] = "viaXageX";
+				v = _mm_broadcastd_epi32(v);
+				v = _mm_cmpeq_epi8(v, *(const __m128i*)key);
+				uint32_t m = _mm_movemask_epi8(v);
+				if (m == 0x8807) return H2O_TOKEN_VIA;
+				if (m == 0x8870) return H2O_TOKEN_AGE;
+			}
+#else
             switch (c0) {
             case 'v':
                 if (is_same_short_str(v, "via", 3))
@@ -196,8 +233,23 @@ const h2o_token_t *h2o_lookup_token(const char *name, size_t len)
                     return H2O_TOKEN_AGE;
                 break;
             }
+#endif
             break;
         case 4:
+#ifdef REDUCE_COMPARE
+			{
+				__m256i v2 = _mm256_broadcastd_epi32(v);
+				static const MIE_ALIGN(16) char key[32] = "dateetaglinkfromhostvary";
+				v2 = _mm256_cmpeq_epi8(v2, *(const __m256i*)key);
+				uint32_t m = _mm256_movemask_epi8(v2);
+				if (m == 0x20000f) return H2O_TOKEN_DATE;
+				if (m == 0x0000f0) return H2O_TOKEN_ETAG;
+				if (m == 0x000f00) return H2O_TOKEN_LINK;
+				if (m == 0x00f000) return H2O_TOKEN_FROM;
+				if (m == 0x0f0000) return H2O_TOKEN_HOST;
+				if (m == 0xf00002) return H2O_TOKEN_VARY;
+			}
+#else
             switch (c0) {
             case 'd':
                 if (is_same_short_str(v, "date", 4))
@@ -224,8 +276,21 @@ const h2o_token_t *h2o_lookup_token(const char *name, size_t len)
                     return H2O_TOKEN_VARY;
                 break;
             }
+#endif
             break;
         case 5:
+#ifdef REDUCE_COMPARE
+			{
+				static MIE_ALIGN(16) const uint64_t ptn[2] = {
+					0x0201000403020100ull, 0xff04030201000403ull
+				};
+				static MIE_ALIGN(16) const char key[16] = "range:pathallow";
+				uint32_t m = match_ptn(v, ptn, key);
+				if (m == 0x801f) return H2O_TOKEN_RANGE;
+				if (m == 0x83e0) return H2O_TOKEN_PATH;
+				if (m == 0xfc00) return H2O_TOKEN_ALLOW;
+			}
+#else
             switch (c0) {
             case 'r':
                 if (is_same_short_str(v, "range", 5))
@@ -240,8 +305,23 @@ const h2o_token_t *h2o_lookup_token(const char *name, size_t len)
                     return H2O_TOKEN_ALLOW;
                 break;
             }
+#endif
             break;
         case 6:
+#ifdef REDUCE_COMPARE
+			{
+				static MIE_ALIGN(16) const uint64_t ptn[4] = {
+					0x0100050403020100ull, 0x0302010005040302ull,
+					0x0504030201000504ull, 0xffffffffffffffffull
+				};
+				static MIE_ALIGN(16) const char key[32] = "cookieserveracceptexpect";
+				uint32_t m = match_ptn2(v, ptn, key);
+				if (m == 0xff00003f) return H2O_TOKEN_COOKIE;
+				if (m == 0xff000fc0) return H2O_TOKEN_SERVER;
+				if (m == 0xffa3f000) return H2O_TOKEN_ACCEPT;
+				if (m == 0xfffe8000) return H2O_TOKEN_EXPECT;
+			}
+#else
             switch (c0) {
             case 'c':
                 if (is_same_short_str(v, "cookie", 6))
@@ -260,6 +340,7 @@ const h2o_token_t *h2o_lookup_token(const char *name, size_t len)
                     return H2O_TOKEN_EXPECT;
                 break;
             }
+#endif
             break;
         case 7:
             switch (h2o_tolower(name[3])) {
@@ -282,11 +363,11 @@ const h2o_token_t *h2o_lookup_token(const char *name, size_t len)
                     return H2O_TOKEN_REFERER;
                 break;
             case 'a':
-                if (is_same_short_str(v, ":status", 6))
+                if (is_same_short_str(v, ":status", 7))
                     return H2O_TOKEN_STATUS;
                 break;
             case 'i':
-                if (is_same_short_str(v, "expires", 6))
+                if (is_same_short_str(v, "expires", 7))
                     return H2O_TOKEN_EXPIRES;
                 break;
             }
