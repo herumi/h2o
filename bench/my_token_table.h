@@ -201,6 +201,9 @@ inline uint32_t match_ptn2(__m128i v, const void *ptn, const char *key)
 
 //#define REDUCE_COMPARE
 
+#define CHAR4_TO_UINT(a, b, c, d) (((uint32_t)d << 24) | ((uint32_t)c << 16) | ((uint32_t)b << 8) | ((uint32_t)a << 0))
+#define CHAR8_TO_UINT(a, b, c, d, e, f, g, h) (((uint64_t)CHAR4_TO_UINT(e, f, g, h) << 32) | CHAR4_TO_UINT(a, b, c, d))
+
 #ifdef BENCHMARK_MODE
 const h2o_token_t *my_h2o_lookup_token(const char *name, size_t len)
 #else
@@ -212,83 +215,36 @@ const h2o_token_t *h2o_lookup_token(const char *name, size_t len)
         __m128i v = toLowerSSE(name);
         switch (len) {
         case 3:
-#ifdef REDUCE_COMPARE
 			{
-				// 'X' in key never match.
-				static const MIE_ALIGN(16) char key[16] = "viaXageX";
-				v = _mm_broadcastd_epi32(v);
-				v = _mm_cmpeq_epi8(v, *(const __m128i*)key);
-				uint32_t m = _mm_movemask_epi8(v);
-				if (m == 0x8807) return H2O_TOKEN_VIA;
-				if (m == 0x8870) return H2O_TOKEN_AGE;
+				uint32_t v2 = _mm_cvtsi128_si32(v) & 0xffffff;
+				switch (v2) {
+				case CHAR4_TO_UINT('v', 'i', 'a', 0): return H2O_TOKEN_VIA;
+				case CHAR4_TO_UINT('a', 'g', 'e', 0): return H2O_TOKEN_AGE;
+				}
 			}
-#else
-            switch (c0) {
-            case 'v':
-                if (is_same_short_str(v, "via", 3))
-                    return H2O_TOKEN_VIA;
-                break;
-            case 'a':
-                if (is_same_short_str(v, "age", 3))
-                    return H2O_TOKEN_AGE;
-                break;
-            }
-#endif
             break;
         case 4:
-#ifdef REDUCE_COMPARE
 			{
-				__m256i v2 = _mm256_broadcastd_epi32(v);
-				static const MIE_ALIGN(16) char key[32] = "dateetaglinkfromhostvary";
-				v2 = _mm256_cmpeq_epi8(v2, *(const __m256i*)key);
-				uint32_t m = _mm256_movemask_epi8(v2);
-				if (m == 0x20000f) return H2O_TOKEN_DATE;
-				if (m == 0x0000f0) return H2O_TOKEN_ETAG;
-				if (m == 0x000f00) return H2O_TOKEN_LINK;
-				if (m == 0x00f000) return H2O_TOKEN_FROM;
-				if (m == 0x0f0000) return H2O_TOKEN_HOST;
-				if (m == 0xf00002) return H2O_TOKEN_VARY;
+				uint32_t v2 = _mm_cvtsi128_si32(v);
+				switch (v2) {
+				case CHAR4_TO_UINT('d', 'a', 't', 'e'): return H2O_TOKEN_DATE;
+				case CHAR4_TO_UINT('e', 't', 'a', 'g'): return H2O_TOKEN_ETAG;
+				case CHAR4_TO_UINT('l', 'i', 'n', 'k'): return H2O_TOKEN_LINK;
+				case CHAR4_TO_UINT('f', 'r', 'o', 'm'): return H2O_TOKEN_FROM;
+				case CHAR4_TO_UINT('h', 'o', 's', 't'): return H2O_TOKEN_HOST;
+				case CHAR4_TO_UINT('v', 'a', 'r', 'y'): return H2O_TOKEN_VARY;
+				}
 			}
-#else
-            switch (c0) {
-            case 'd':
-                if (is_same_short_str(v, "date", 4))
-                    return H2O_TOKEN_DATE;
-                break;
-            case 'e':
-                if (is_same_short_str(v, "etag", 4))
-                    return H2O_TOKEN_ETAG;
-                break;
-            case 'l':
-                if (is_same_short_str(v, "link", 4))
-                    return H2O_TOKEN_LINK;
-                break;
-            case 'f':
-                if (is_same_short_str(v, "from", 4))
-                    return H2O_TOKEN_FROM;
-                break;
-            case 'h':
-                if (is_same_short_str(v, "host", 4))
-                    return H2O_TOKEN_HOST;
-                break;
-            case 'v':
-                if (is_same_short_str(v, "vary", 4))
-                    return H2O_TOKEN_VARY;
-                break;
-            }
-#endif
             break;
         case 5:
 #ifdef REDUCE_COMPARE
 			{
-				static MIE_ALIGN(16) const uint64_t ptn[2] = {
-					0x0201000403020100ull, 0xff04030201000403ull
-				};
-				static MIE_ALIGN(16) const char key[16] = "range:pathallow";
-				uint32_t m = match_ptn(v, ptn, key);
-				if (m == 0x801f) return H2O_TOKEN_RANGE;
-				if (m == 0x83e0) return H2O_TOKEN_PATH;
-				if (m == 0xfc00) return H2O_TOKEN_ALLOW;
+				uint64_t v2 = _mm_cvtsi128_si64(v) & ((1ull << 40) - 1);
+				switch (v2) {
+				case CHAR8_TO_UINT('r', 'a', 'n', 'g', 'e', 0, 0, 0): return H2O_TOKEN_RANGE;
+				case CHAR8_TO_UINT(':', 'p', 'a', 't', 'h', 0, 0, 0): return H2O_TOKEN_PATH;
+				case CHAR8_TO_UINT('a', 'l', 'l', 'o', 'w', 0, 0, 0): return H2O_TOKEN_ALLOW;
+				}
 			}
 #else
             switch (c0) {
@@ -310,16 +266,13 @@ const h2o_token_t *h2o_lookup_token(const char *name, size_t len)
         case 6:
 #ifdef REDUCE_COMPARE
 			{
-				static MIE_ALIGN(16) const uint64_t ptn[4] = {
-					0x0100050403020100ull, 0x0302010005040302ull,
-					0x0504030201000504ull, 0xffffffffffffffffull
-				};
-				static MIE_ALIGN(16) const char key[32] = "cookieserveracceptexpect";
-				uint32_t m = match_ptn2(v, ptn, key);
-				if (m == 0xff00003f) return H2O_TOKEN_COOKIE;
-				if (m == 0xff000fc0) return H2O_TOKEN_SERVER;
-				if (m == 0xffa3f000) return H2O_TOKEN_ACCEPT;
-				if (m == 0xfffe8000) return H2O_TOKEN_EXPECT;
+				uint64_t v2 = _mm_cvtsi128_si64(v) & ((1ull << 48) - 1);
+				switch (v2) {
+				case CHAR8_TO_UINT('c', 'o', 'o', 'k', 'i', 'e', 0, 0): return H2O_TOKEN_COOKIE;
+				case CHAR8_TO_UINT('s', 'e', 'r', 'v', 'e', 'r', 0, 0): return H2O_TOKEN_SERVER;
+				case CHAR8_TO_UINT('a', 'c', 'c', 'e', 'p', 't', 0, 0): return H2O_TOKEN_ACCEPT;
+				case CHAR8_TO_UINT('e', 'x', 'p', 'e', 'c', 't', 0, 0): return H2O_TOKEN_EXPECT;
+				}
 			}
 #else
             switch (c0) {
@@ -373,20 +326,14 @@ const h2o_token_t *h2o_lookup_token(const char *name, size_t len)
             }
             break;
         case 8:
-            switch (h2o_tolower(name[7])) {
-            case 'e':
-                if (is_same_short_str(v, "if-range", 8))
-                    return H2O_TOKEN_IF_RANGE;
-                break;
-            case 'h':
-                if (is_same_short_str(v, "if-match", 8))
-                    return H2O_TOKEN_IF_MATCH;
-                break;
-            case 'n':
-                if (is_same_short_str(v, "location", 8))
-                    return H2O_TOKEN_LOCATION;
-                break;
-            }
+			{
+				uint64_t v2 = _mm_cvtsi128_si64(v);
+				switch (v2) {
+				case CHAR8_TO_UINT('i', 'f', '-', 'r', 'a', 'n', 'g', 'e'): return H2O_TOKEN_IF_RANGE;
+				case CHAR8_TO_UINT('i', 'f', '-', 'm', 'a', 't', 'c', 'h'): return H2O_TOKEN_IF_MATCH;
+				case CHAR8_TO_UINT('l', 'o', 'c', 'a', 't', 'i', 'o', 'n'): return H2O_TOKEN_LOCATION;
+				}
+			}
             break;
         case 10:
             switch (c0) {
@@ -550,4 +497,6 @@ const h2o_token_t *h2o_lookup_token(const char *name, size_t len)
     }
     return NULL;
 }
+
+#undef CHAR4_TO_UINT
 
