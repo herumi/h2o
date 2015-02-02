@@ -110,7 +110,7 @@ const h2o_token_t *h2o_lookup_token(const char *name, size_t len)
         case '<?= $end ?>':
 ?   my @tokens_of_end = grep { substr($_->[0], length($_->[0]) - 1) eq $end } @tokens_of_len;
 ?   for my $token (@tokens_of_end) {
-?           my $param = join("@, @", split(//, substr($token->[0], 0, length($token->[0]) - 1)));
+?           my $param = join("', '", split(//, substr($token->[0], 0, length($token->[0]) - 1)));
             if (!local_is_diff<?= $len-1 ?>(name, '<?= $param ?>')))
                 return <?= normalize_name($token->[0]) ?>;
 ?   }
