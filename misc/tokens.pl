@@ -97,6 +97,7 @@ h2o_token_t h2o__tokens[] = {
 ? }
 };
 size_t h2o__num_tokens = <?= scalar @$tokens ?>;
+#include "fast_diff.h"
 
 const h2o_token_t *h2o_lookup_token(const char *name, size_t len)
 {
@@ -109,7 +110,8 @@ const h2o_token_t *h2o_lookup_token(const char *name, size_t len)
         case '<?= $end ?>':
 ?   my @tokens_of_end = grep { substr($_->[0], length($_->[0]) - 1) eq $end } @tokens_of_len;
 ?   for my $token (@tokens_of_end) {
-            if (memcmp(name, "<?= substr($token->[0], 0, length($token->[0]) - 1) ?>", <?= length($token->[0]) - 1 ?>) == 0)
+?           my $param = join("@, @", split(//, substr($token->[0], 0, length($token->[0]) - 1)));
+            if (!local_is_diff<?= $len-1 ?>(name, '<?= $param ?>')))
                 return <?= normalize_name($token->[0]) ?>;
 ?   }
             break;
